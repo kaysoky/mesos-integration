@@ -12,6 +12,8 @@
   ```
   export MESOS_BIN_PATH=/path/to/mesos/bin
   export PATH_TO_MARATHON=/path/to/marathon/bin
+
+  # Optional, unless your binaries are not in /usr/lib or /usr/local/lib.
   export MESOS_NATIVE_JAVA_LIBRARY=/path/to/libmesos.dylib
   ```
 

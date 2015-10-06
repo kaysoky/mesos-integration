@@ -68,17 +68,19 @@ class SSL_Test(unittest.TestCase):
 
 
     def test_marathon(self):
-        start_marathon(self.work_dir)
+        start_marathon(self.work_dir,
+                       flags=['--ssl_keystore_path', os.path.join(self.work_dir, SSL_MARATHON_KEYSTORE),
+                              '--ssl_keystore_password', SUPER_SECURE_PASSPHRASE])
         self.assertTrue(wait_for_marathon(self.work_dir, is_ssl=True), 'Marathon failed to start in time.')
 
 
 if __name__ == '__main__':
-    if MESOS_BIN_PATH not in os.environ:
-        print 'Environment variable "%s" not set.' % MESOS_BIN_PATH
-        exit(1)
+    # Check that `openssl` is available.
+    subprocess.check_call(['openssl', 'version'])
 
-    if PATH_TO_MARATHON not in os.environ:
-        print 'Environment variable "%s" not set.' % PATH_TO_MARATHON
-        exit(1)
+    for var in [MESOS_BIN_PATH, PATH_TO_MARATHON]:
+        if var not in os.environ:
+            print 'Environment variable "%s" not set.' % var
+            exit(1)
 
     unittest.main()

@@ -38,31 +38,51 @@ def cleanup():
 
 def generate_ssl_stuff(work_dir):
     """Generates the required SSL files."""
-    subprocess.check_call(
-        ['openssl', 'req', '-nodes', '-new', '-x509',
-         '-batch', '-days', '365',
-         '-subj', '/CN=localhost',
-         '-keyout', os.path.join(work_dir, SSL_KEY_FILE),
-         '-out', os.path.join(work_dir, SSL_CERT_FILE)])
+    # Generate a private key and certificate.
+    subprocess.check_call([
+        'openssl', 'req', '-nodes', '-new', '-x509',
+        '-batch', '-days', '365',
+        '-subj', '/CN=localhost',
+        '-keyout', os.path.join(work_dir, SSL_KEY_FILE),
+        '-out', os.path.join(work_dir, SSL_CERT_FILE)])
 
     '''
     These are the calls with passphrase.
     Currently, the passphrase can't be supplied to the master trivially.
 
-    subprocess.check_call(
-        ['openssl', 'genrsa', '-des3', '-f4',
-         '-passout', SSL_SUPER_SECURE_PASSPHRASE,
-         '-out', os.path.join(work_dir, SSL_KEY_FILE),
-         '4096'])
+    subprocess.check_call([
+        'openssl', 'genrsa', '-des3', '-f4',
+        '-passout', SSL_SUPER_SECURE_PASSPHRASE,
+        '-out', os.path.join(work_dir, SSL_KEY_FILE),
+        '4096'])
 
-    subprocess.check_call(
-        ['openssl', 'req', '-new', '-x509',
-         '-passin', SSL_SUPER_SECURE_PASSPHRASE,
-         '-batch', '-days', '365',
-         '-subj', '/CN=localhost',
-         '-key', os.path.join(work_dir, SSL_KEY_FILE),
-         '-out', os.path.join(work_dir, SSL_CERT_FILE)])
+    subprocess.check_call([
+        'openssl', 'req', '-new', '-x509',
+        '-passin', SSL_SUPER_SECURE_PASSPHRASE,
+        '-batch', '-days', '365',
+        '-subj', '/CN=localhost',
+        '-key', os.path.join(work_dir, SSL_KEY_FILE),
+        '-out', os.path.join(work_dir, SSL_CERT_FILE)])
     '''
+
+    # Generate a Java keystore, for Marathon.
+    subprocess.check_call([
+        'openssl', 'pkcs12',
+        '-inkey', os.path.join(work_dir, SSL_KEY_FILE),
+        '-name', 'marathon',
+        '-in', os.path.join(work_dir, SSL_CERT_FILE),
+        '-password', SSL_SUPER_SECURE_PASSPHRASE,
+        # '-chain', '-CAFile', os.path.join(work_dir, SSL_TRUSTED_AUTHORITY),
+        '-export', '-out', os.path.join(work_dir, SSL_MARATHON_PKCS)])
+
+    subprocess.check_call([
+        'keytool', '-importkeystore',
+        '-srckeystore', os.path.join(work_dir, SSL_MARATHON_PKCS),
+        '-srcalias', 'marathon',
+        '-srcstorepass', SUPER_SECURE_PASSPHRASE,
+        '-srcstoretype', 'PKCS12',
+        '-destkeystore', os.path.join(work_dir, SSL_MARATHON_KEYSTORE),
+        '-deststorepass', SUPER_SECURE_PASSPHRASE])
 
 
 def start_master(work_dir, flags=[]):
@@ -73,9 +93,9 @@ def start_master(work_dir, flags=[]):
     register_exit(lambda: stdout.close())
     register_exit(lambda: stderr.close())
 
-    master = subprocess.Popen(
-        [os.path.join(mesos_path(), MESOS_MASTER_BIN),
-         '--work_dir=%s' % work_dir] + flags,
+    master = subprocess.Popen([
+        os.path.join(mesos_path(), MESOS_MASTER_BIN),
+        '--work_dir=%s' % work_dir] + flags,
         stdin=None,
         stdout=stdout,
         stderr=stderr)
@@ -110,19 +130,20 @@ def start_agent(work_dir, flags=[]):
     register_exit(lambda: stdout.close())
     register_exit(lambda: stderr.close())
 
-    agent = subprocess.Popen(
-        [os.path.join(mesos_path(), MESOS_AGENT_BIN),
-         '--master=10.141.141.1:5050'] + flags,
+    agent = subprocess.Popen([
+        os.path.join(mesos_path(), MESOS_AGENT_BIN),
+        '--master=10.141.141.1:5050'] + flags,
         stdin=None,
         stdout=stdout,
         stderr=stderr)
 
     assert agent.returncode is None
 
+    register_exit(lambda: subprocess.check_call(['rm', '-rf', '/tmp/mesos/meta/slaves/latest']))
     register_exit(lambda: agent.kill())
 
 
-def wait_for_agent(work_dir, num_agents=1, timeout=5, is_ssl=False):
+def wait_for_agent(work_dir, num_agents=1, timeout=7, is_ssl=False):
     """Waits for an Agent to start."""
     while timeout:
         try:
@@ -141,7 +162,7 @@ def wait_for_agent(work_dir, num_agents=1, timeout=5, is_ssl=False):
     return timeout > 0
 
 
-def start_marathon(work_dir):
+def start_marathon(work_dir, flags=[]):
     """Starts Marathon."""
     print 'Starting Marathon'
     stdout = open(os.path.join(work_dir, 'm_stdout.txt'), 'w')
@@ -153,10 +174,10 @@ def start_marathon(work_dir):
     subprocess.check_call(['zkserver', 'start'])
     register_exit(lambda: subprocess.check_call(['zkserver', 'stop']))
 
-    marathon = subprocess.Popen(
-        [os.path.join(marathon_path(), MARATHON_BIN),
-         '--master', '10.141.141.1:5050',
-         '--zk', 'zk://localhost:2181/marathon'],
+    marathon = subprocess.Popen([
+        os.path.join(marathon_path(), MARATHON_BIN),
+        '--master', '10.141.141.1:5050',
+        '--zk', 'zk://localhost:2181/marathon'] + flags,
         stdin=None,
         stdout=stdout,
         stderr=stderr)
@@ -167,11 +188,15 @@ def wait_for_marathon(work_dir, timeout=15, is_ssl=False):
     """Waits for the Marathon UI to show up."""
     while timeout:
         try:
-            result = requests.get('http%s://localhost:8080/' % ('s' if is_ssl else ''),
-                                  verify=os.path.join(work_dir, SSL_CERT_FILE))
-            if result.status_code == 200:
+            # Note: Some versions of Python (on OSX) do not have TLSv1.2 support.
+            # So we need to use curl to talk via HTTPS.
+            output = subprocess.check_output([
+                'curl', '-I', '--tlsv1.2',
+                '--cacert', os.path.join(work_dir, SSL_CERT_FILE),
+                'http%s://localhost:%d/ping' % ('s' if is_ssl else '', 8443 if is_ssl else 8080)])
+            if '200 OK' in output:
                 break
-        except requests.ConnectionError as e:
+        except subprocess.CalledProcessError as e:
             print e
 
         time.sleep(1)
