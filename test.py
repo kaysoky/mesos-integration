@@ -1,3 +1,4 @@
+import atexit
 import os
 import tempfile
 import time
@@ -25,10 +26,17 @@ class NoSSL_Test(unittest.TestCase):
         if not wait_for_agent(cls.work_dir):
             assert False, 'Agent failed to start in time.'
 
+        start_zookeeper()
+
 
     @classmethod
     def tearDownClass(cls):
         cleanup()
+
+
+    def test_chronos(self):
+        start_chronos(self.work_dir)
+        self.assertTrue(wait_for_chronos(self.work_dir), 'Chronos failed to start in time.')
 
 
     def test_marathon(self):
@@ -61,6 +69,8 @@ class SSL_Test(unittest.TestCase):
         if not wait_for_agent(cls.work_dir, is_ssl=True):
             assert False, 'Agent failed to start in time.'
 
+        start_zookeeper()
+
 
     @classmethod
     def tearDownClass(cls):
@@ -68,7 +78,7 @@ class SSL_Test(unittest.TestCase):
 
 
     def test_marathon(self):
-        start_marathon(self.work_dir,
+        start_marathon(self.work_dir, is_ssl=True,
                        flags=['--ssl_keystore_path', os.path.join(self.work_dir, SSL_MARATHON_KEYSTORE),
                               '--ssl_keystore_password', SUPER_SECURE_PASSPHRASE])
         self.assertTrue(wait_for_marathon(self.work_dir, is_ssl=True), 'Marathon failed to start in time.')
@@ -78,9 +88,13 @@ if __name__ == '__main__':
     # Check that `openssl` is available.
     subprocess.check_call(['openssl', 'version'])
 
-    for var in [MESOS_BIN_PATH, PATH_TO_MARATHON]:
+    # Check that ZooKeeper is available.
+    subprocess.check_call(['zkserver', 'print-cmd'])
+
+    for var in [MESOS_BIN_PATH, PATH_TO_MARATHON, PATH_TO_CHRONOS]:
         if var not in os.environ:
             print 'Environment variable "%s" not set.' % var
             exit(1)
 
+    atexit.register(cleanup)
     unittest.main()
