@@ -44,6 +44,10 @@ class NoSSL_Test(unittest.TestCase):
         self.assertTrue(wait_for_marathon(self.work_dir), 'Marathon failed to start in time.')
 
 
+    def test_spark(self):
+        self.assertTrue(run_example_spark_job(self.work_dir))
+
+
 class SSL_Test(unittest.TestCase):
     """Tests stuff with SSL enabled, without downgrade."""
 
@@ -77,11 +81,22 @@ class SSL_Test(unittest.TestCase):
         cleanup()
 
 
+    def test_chronos(self):
+        start_chronos(self.work_dir, is_ssl=True,
+                       flags=['--ssl_keystore_path', os.path.join(self.work_dir, SSL_MARATHON_KEYSTORE),
+                              '--ssl_keystore_password', SUPER_SECURE_PASSPHRASE])
+        self.assertTrue(wait_for_chronos(self.work_dir, is_ssl=True), 'Chronos failed to start in time.')
+
+
     def test_marathon(self):
         start_marathon(self.work_dir, is_ssl=True,
                        flags=['--ssl_keystore_path', os.path.join(self.work_dir, SSL_MARATHON_KEYSTORE),
                               '--ssl_keystore_password', SUPER_SECURE_PASSPHRASE])
         self.assertTrue(wait_for_marathon(self.work_dir, is_ssl=True), 'Marathon failed to start in time.')
+
+
+    def test_spark(self):
+        self.assertTrue(run_example_spark_job(self.work_dir))
 
 
 if __name__ == '__main__':
@@ -91,7 +106,7 @@ if __name__ == '__main__':
     # Check that ZooKeeper is available.
     subprocess.check_call(['zkserver', 'print-cmd'])
 
-    for var in [MESOS_BIN_PATH, PATH_TO_MARATHON, PATH_TO_CHRONOS]:
+    for var in [MESOS_BIN_PATH, PATH_TO_MARATHON, PATH_TO_CHRONOS, PATH_TO_SPARK]:
         if var not in os.environ:
             print 'Environment variable "%s" not set.' % var
             exit(1)
