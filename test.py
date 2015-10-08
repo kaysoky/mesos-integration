@@ -66,7 +66,7 @@ class SSL_Test(unittest.TestCase):
         ssl_utils.generate_ssl_stuff(cls.work_dir)
         os.environ['SSL_ENABLED'] = 'true'
         os.environ['SSL_KEY_FILE'] = os.path.join(cls.work_dir, SSL_KEY_FILE)
-        os.environ['SSL_CERT_FILE'] = os.path.join(cls.work_dir, SSL_CERT_FILE)
+        os.environ['SSL_CERT_FILE'] = os.path.join(cls.work_dir, SSL_CHAIN_FILE)
 
         # Start Mesos.
         start_master(cls.work_dir)

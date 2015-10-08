@@ -2,6 +2,13 @@
 
 ## Build
 0. [Python 2.7.9+](https://www.python.org/downloads/).
+  * Download Python source.
+  * `cd <python source>`
+  * `./configure CPPFLAGS="-I$OPENSSL_ROOT/include" LDFLAGS="-L$OPENSSL_ROOT/lib"`
+  * `make`
+  * `make install`
+  * Make sure python uses the correct version of OpenSSL (1.0.1+)
+    `python -c "import ssl; print ssl.OPENSSL_VERSION"`
 1. [Mesos](http://mesos.apache.org/documentation/latest/getting-started/) + [SSL](http://mesos.apache.org/documentation/latest/mesos-ssl/).
 2. [Marathon](http://mesosphere.github.io/marathon/docs/).
 3. [Chronos](http://mesos.github.io/chronos/docs/).

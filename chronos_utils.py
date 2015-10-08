@@ -1,5 +1,6 @@
 import json
 import os
+import requests
 import subprocess
 import time
 
@@ -37,13 +38,11 @@ def wait_for_chronos(work_dir, timeout=15, is_ssl=False):
     """Waits for the Chronos to start up."""
     while timeout:
         try:
-            # Note: Some versions of Python (on OSX) do not have TLSv1.2 support.
-            # So we need to use curl to talk via HTTPS.
-            output = call(curl_ssl(work_dir) + ['-I', '-m', '2',
-                'http%s://localhost:%d/scheduler/jobs' % ('s' if is_ssl else '', 8443 if is_ssl else 8080)])
-            if '200 OK' in output:
+            result = requests.get('http%s://localhost:%d/scheduler/jobs' % ('s' if is_ssl else '', 8443 if is_ssl else 8080),
+                verify=os.path.join(work_dir, SSL_CHAIN_FILE))
+            if result.status_code == 200:
                 break
-        except subprocess.CalledProcessError as e:
+        except requests.ConnectionError as e:
             pass
 
         time.sleep(1)

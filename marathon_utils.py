@@ -1,5 +1,6 @@
 import json
 import os
+import requests
 import subprocess
 import time
 
@@ -34,13 +35,11 @@ def wait_for_marathon(work_dir, timeout=25, is_ssl=False):
     """Waits for the Marathon UI to show up."""
     while timeout:
         try:
-            # Note: Some versions of Python (on OSX) do not have TLSv1.2 support.
-            # So we need to use curl to talk via HTTPS.
-            output = call(curl_ssl(work_dir) + ['-I',
-                'http%s://localhost:%d/ping' % ('s' if is_ssl else '', 8444 if is_ssl else 8081)])
-            if '200 OK' in output:
+            result = requests.get('http%s://localhost:%d/ping' % ('s' if is_ssl else '', 8444 if is_ssl else 8081),
+                verify=os.path.join(work_dir, SSL_CHAIN_FILE))
+            if result.status_code == 200:
                 break
-        except subprocess.CalledProcessError as e:
+        except requests.ConnectionError as e:
             pass
 
         time.sleep(1)
@@ -63,16 +62,17 @@ def run_example_marathon_app(work_dir, timeout=10, is_ssl=False):
     }
 
     # Launch a sleep task.
-    call(curl_ssl(work_dir) + ['-X', 'POST',
-        'http%s://localhost:%d/v2/apps' % ('s' if is_ssl else '', 8444 if is_ssl else 8081),
-        '-H', 'Content-Type: application/json',
-        '-d', json.dumps(app_def)])
+    requests.post('http%s://localhost:%d/v2/apps' % ('s' if is_ssl else '', 8444 if is_ssl else 8081),
+        headers={"Content-Type": "application/json"},
+        data=json.dumps(app_def),
+        verify=os.path.join(work_dir, SSL_CHAIN_FILE))
 
     # Wait for it.
     while timeout:
-        result = call(curl_ssl(work_dir) + ['http%s://localhost:%d/v2/apps/basic-0/tasks' % ('s' if is_ssl else '', 8444 if is_ssl else 8081)])
+        result = requests.get('http%s://localhost:%d/v2/apps/basic-0/tasks' % ('s' if is_ssl else '', 8444 if is_ssl else 8081),
+            verify=os.path.join(work_dir, SSL_CHAIN_FILE))
 
-        result = json.loads(result)
+        result = result.json()
         if len(result['tasks']) == 1 and result['tasks'][0]['appId'] == '/basic-0':
             return True
 

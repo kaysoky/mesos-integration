@@ -1,5 +1,6 @@
 import json
 import os
+import requests
 import subprocess
 import time
 
@@ -11,17 +12,12 @@ def call(command):
     Blocks on subprocess.Popen until the command finishes.
     Returns the stdout and stderr.  Suppresses console output.
     """
+    return subprocess.check_output(command)
+
     stdout, stderr = subprocess.Popen(command,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE).communicate()
     return stdout
-
-
-def curl_ssl(work_dir):
-    """Returns an incomplete curl command string with SSL flags."""
-    # TODO: Get rid of this `--insecure` flag.
-    return ['curl', '-sS', '--tlsv1.2', '--insecure']
-    # '--cacert', os.path.join(work_dir, SSL_CERT_FILE)
 
 
 CLEANUP_LAMBDAS = []
@@ -49,8 +45,9 @@ def start_zookeeper():
 
 def check_framework_in_state_json(work_dir, framework, is_ssl=False):
     """Checks master's state.json for the given framework."""
-    result = call(curl_ssl(work_dir) + ['http%s://localhost:5050/master/state.json' % ('s' if is_ssl else '')])
-    result = json.loads(result)['frameworks']
+    result = requests.get('http%s://localhost:5050/master/state.json' % ('s' if is_ssl else ''),
+        verify=os.path.join(work_dir, SSL_CHAIN_FILE))
+    result = result.json()['frameworks']
     result = filter(lambda x: x['name'] == framework, result)
     if len(result) == 1 and result[0]['active']:
         return True

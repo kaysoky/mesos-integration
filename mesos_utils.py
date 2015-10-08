@@ -1,5 +1,6 @@
 import json
 import os
+import requests
 import subprocess
 import time
 
@@ -36,12 +37,12 @@ def wait_for_master(work_dir, timeout=5, is_ssl=False):
     """Waits for a Master to start."""
     while timeout:
         try:
-            output = call(curl_ssl(work_dir) + ['-I',
-                'http%s://%s/master/state.json' % ('s' if is_ssl else '', MESOS_MASTER_CIDR)])
-            if '200 OK' in output:
+            result = requests.get('http%s://%s/master/state.json' % ('s' if is_ssl else '', MESOS_MASTER_CIDR),
+                verify=os.path.join(work_dir, SSL_CHAIN_FILE))
+            if result.status_code == 200:
                 break
-        except subprocess.CalledProcessError as e:
-            print e
+        except requests.ConnectionError as e:
+            pass
 
         time.sleep(1)
         timeout -= 1
@@ -74,11 +75,12 @@ def wait_for_agent(work_dir, num_agents=1, timeout=7, is_ssl=False):
     """Waits for an Agent to start."""
     while timeout:
         try:
-            result = call(curl_ssl(work_dir) + ['http%s://%s/master/state.json' % ('s' if is_ssl else '', MESOS_MASTER_CIDR)])
-            result = json.loads(result)
+            result = requests.get('http%s://%s/master/state.json' % ('s' if is_ssl else '', MESOS_MASTER_CIDR),
+                verify=os.path.join(work_dir, SSL_CHAIN_FILE))
+            result = result.json()
             if len(result['slaves']) == num_agents and all(map(lambda x: x['active'], result['slaves'])):
                 break
-        except subprocess.CalledProcessError as e:
+        except requests.ConnectionError as e:
             pass
 
         time.sleep(1)

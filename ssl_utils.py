@@ -5,7 +5,8 @@ from utils import *
 
 """
 A root Certificate Authority configuration file.
-Base on https://jamielinux.com/docs/openssl-certificate-authority/appendix/root-configuration-file.html
+
+Base on: https://jamielinux.com/docs/openssl-certificate-authority/appendix/root-configuration-file.html
 """
 template = """
 [ ca ]
@@ -37,7 +38,7 @@ name_opt        = ca_default    # Subject Name options
 cert_opt        = ca_default    # Certificate field options
 default_days    = 365           # How long to certify for
 preserve        = no            # keep passed DN ordering
-policy          = policy_strict # How similar each request should look
+policy          = policy_loose  # How similar each request should look
 
 [ policy_loose ]
 countryName            = optional
@@ -56,14 +57,14 @@ default_md         = default
 x509_extensions    = v3_ca # For self-signed (x509) certs
 
 # Passwords for private keys
-# input_password  = secret
-# output_password = secret
+input_password  = {passphrase}
+output_password = {passphrase}
 
 [ req_distinguished_name ]
 countryName_default         = US
 stateOrProvinceName_default = CA
 localityName_default        = SF
-0.organizationName_default  = Mesosphere
+0.organizationName_default  = Not Apache Mesos
 
 [ v3_ca ]
 subjectKeyIdentifier   = hash
@@ -108,52 +109,85 @@ extendedKeyUsage       = critical, OCSPSigning
 
 
 def generate_ssl_stuff(work_dir):
-    """Generates the required SSL files."""
-    # TODO: I think I'm doing this incorrectly.
+    """
+    Generates a root key and certificate.
 
-    # Generate a private key and certificate.
-    call([
-        'openssl', 'req', '-nodes', '-new', '-x509',
+    Based on: https://jamielinux.com/docs/openssl-certificate-authority/index.html
+    """
+
+    # Setup a directory structure to keep track of certificates.
+    call(['mkdir', '-p',
+          os.path.join(work_dir, SSL_CERT_DIR),
+          os.path.join(work_dir, SSL_CRL_DIR),
+          os.path.join(work_dir, SSL_CSR_DIR),
+          os.path.join(work_dir, SSL_NEWCERTS_DIR),
+          os.path.join(work_dir, SSL_PRIVATE_DIR)])
+
+    # Generate some files that get modified as a side-effect of openssl actions.
+    call(['touch', os.path.join(work_dir, SSL_INDEX_FILE)])
+    with open(os.path.join(work_dir, SSL_SERIAL_FILE), 'w') as f:
+        f.write('1000')
+    with open(os.path.join(work_dir, SSL_CRL_FILE), 'w') as f:
+        f.write('1000')
+
+    # Write the configuration file.
+    with open(os.path.join(work_dir, SSL_CONFIG_FILE), 'w') as f:
+        f.write(template.format(
+            working_dir=work_dir,
+            passphrase=SUPER_SECURE_PASSPHRASE))
+
+    # Generate a root key.
+    call(['openssl', 'genrsa', '-f4',
+        # '-des3', '-passout', SSL_SUPER_SECURE_PASSPHRASE,
+        '-out', os.path.join(work_dir, SSL_ROOT_KEY_FILE),
+        '4096'])
+
+    # Generate a root certificate.
+    call(['openssl', 'req', '-new', '-x509',
         '-batch', '-days', '365',
+        '-subj', '/CN=Mesos Integration',
+        '-sha256', '-extensions', 'v3_ca',
+        '-config', os.path.join(work_dir, SSL_CONFIG_FILE),
+        '-key', os.path.join(work_dir, SSL_ROOT_KEY_FILE),
+        '-out', os.path.join(work_dir, SSL_ROOT_CERT_FILE)])
+
+    # Generate a private key.
+    call(['openssl', 'genrsa', '-f4',
+        # '-des3', '-passout', SSL_SUPER_SECURE_PASSPHRASE,
+        '-out', os.path.join(work_dir, SSL_KEY_FILE),
+        '4096'])
+
+    # Generate a Certificate Signing Request (CSR).
+    call(['openssl', 'req', '-new', '-sha256',
+        '-batch',
         '-subj', '/CN=127.0.0.1/CN=localhost',
-        '-keyout', os.path.join(work_dir, SSL_KEY_FILE),
+        '-config', os.path.join(work_dir, SSL_CONFIG_FILE),
+        '-key', os.path.join(work_dir, SSL_KEY_FILE),
+        '-out', os.path.join(work_dir, SSL_CSR_FILE)])
+
+    # Sign the CSR.
+    call(['openssl', 'ca', '-md', 'sha256',
+        '-batch', '-days', '30', '-notext',
+        '-extensions', 'server_cert',
+        '-config', os.path.join(work_dir, SSL_CONFIG_FILE),
+        '-in', os.path.join(work_dir, SSL_CSR_FILE),
         '-out', os.path.join(work_dir, SSL_CERT_FILE)])
 
-    '''
-    These are the calls with passphrase.
-    Currently, the passphrase can't be supplied to the master trivially.
+    # Generate a Certificate Chain file.
+    with open(os.path.join(work_dir, SSL_CHAIN_FILE), 'w') as f:
+        with open(os.path.join(work_dir, SSL_CERT_FILE), 'r') as g:
+            with open(os.path.join(work_dir, SSL_ROOT_CERT_FILE), 'r') as h:
+                f.write(g.read() + h.read())
 
-    subprocess.Popen([
-        'openssl', 'genrsa', '-des3', '-f4',
-        '-passout', SSL_SUPER_SECURE_PASSPHRASE,
-        '-out', os.path.join(work_dir, SSL_KEY_FILE),
-        '4096'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE).communicate()
-
-    subprocess.Popen([
-        'openssl', 'req', '-new', '-x509',
-        '-passin', SSL_SUPER_SECURE_PASSPHRASE,
-        '-batch', '-days', '365',
-        '-subj', '/CN=127.0.0.1/CN=localhost',
-        '-key', os.path.join(work_dir, SSL_KEY_FILE),
-        '-out', os.path.join(work_dir, SSL_CERT_FILE)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE).communicate()
-    '''
-
-    # Generate a Java keystore, for Marathon.
-    call([
-        'openssl', 'pkcs12',
+    # Generate a Java keystore, for Marathon/Chronos.
+    call(['openssl', 'pkcs12',
         '-inkey', os.path.join(work_dir, SSL_KEY_FILE),
         '-name', 'marathon',
         '-in', os.path.join(work_dir, SSL_CERT_FILE),
         '-password', SSL_SUPER_SECURE_PASSPHRASE,
-        # '-chain', '-CAFile', os.path.join(work_dir, SSL_TRUSTED_AUTHORITY),
         '-export', '-out', os.path.join(work_dir, SSL_MARATHON_PKCS)])
 
-    call([
-        'keytool', '-importkeystore',
+    call(['keytool', '-importkeystore',
         '-srckeystore', os.path.join(work_dir, SSL_MARATHON_PKCS),
         '-srcalias', 'marathon',
         '-srcstorepass', SUPER_SECURE_PASSPHRASE,
