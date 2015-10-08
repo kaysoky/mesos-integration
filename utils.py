@@ -1,7 +1,5 @@
 import json
 import os
-import requests
-import ssl
 import subprocess
 import time
 
@@ -28,6 +26,23 @@ def spark_path():
     return os.environ.get(PATH_TO_SPARK)
 
 
+def call(command):
+    """
+    Blocks on subprocess.Popen until the command finishes.
+    Returns the stdout and stderr.  Suppresses console output.
+    """
+    return subprocess.Popen(command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE).communicate()
+
+
+def curl_ssl(work_dir):
+    """Returns an incomplete curl command string with SSL flags."""
+    # TODO: Get rid of this `--insecure` flag.
+    return ['curl', '--tlsv1.2', '--insecure']
+    # '--cacert', os.path.join(work_dir, SSL_CERT_FILE)
+
+
 CLEANUP_LAMBDAS = []
 def register_exit(func):
     """
@@ -46,8 +61,10 @@ def cleanup():
 
 def generate_ssl_stuff(work_dir):
     """Generates the required SSL files."""
+    # TODO: I think I'm doing this incorrectly.
+
     # Generate a private key and certificate.
-    subprocess.check_call([
+    call([
         'openssl', 'req', '-nodes', '-new', '-x509',
         '-batch', '-days', '365',
         '-subj', '/CN=127.0.0.1/CN=localhost',
@@ -58,23 +75,27 @@ def generate_ssl_stuff(work_dir):
     These are the calls with passphrase.
     Currently, the passphrase can't be supplied to the master trivially.
 
-    subprocess.check_call([
+    subprocess.Popen([
         'openssl', 'genrsa', '-des3', '-f4',
         '-passout', SSL_SUPER_SECURE_PASSPHRASE,
         '-out', os.path.join(work_dir, SSL_KEY_FILE),
-        '4096'])
+        '4096'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE).communicate()
 
-    subprocess.check_call([
+    subprocess.Popen([
         'openssl', 'req', '-new', '-x509',
         '-passin', SSL_SUPER_SECURE_PASSPHRASE,
         '-batch', '-days', '365',
         '-subj', '/CN=127.0.0.1/CN=localhost',
         '-key', os.path.join(work_dir, SSL_KEY_FILE),
-        '-out', os.path.join(work_dir, SSL_CERT_FILE)])
+        '-out', os.path.join(work_dir, SSL_CERT_FILE)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE).communicate()
     '''
 
     # Generate a Java keystore, for Marathon.
-    subprocess.check_call([
+    call([
         'openssl', 'pkcs12',
         '-inkey', os.path.join(work_dir, SSL_KEY_FILE),
         '-name', 'marathon',
@@ -83,7 +104,7 @@ def generate_ssl_stuff(work_dir):
         # '-chain', '-CAFile', os.path.join(work_dir, SSL_TRUSTED_AUTHORITY),
         '-export', '-out', os.path.join(work_dir, SSL_MARATHON_PKCS)])
 
-    subprocess.check_call([
+    call([
         'keytool', '-importkeystore',
         '-srckeystore', os.path.join(work_dir, SSL_MARATHON_PKCS),
         '-srcalias', 'marathon',
@@ -105,7 +126,6 @@ def start_master(work_dir, flags=[]):
         os.path.join(mesos_path(), MESOS_MASTER_BIN),
         '--ip=%s' % MESOS_MASTER_IP,
         '--work_dir=%s' % work_dir] + flags,
-        stdin=None,
         stdout=stdout,
         stderr=stderr)
 
@@ -118,11 +138,11 @@ def wait_for_master(work_dir, timeout=5, is_ssl=False):
     """Waits for a Master to start."""
     while timeout:
         try:
-            result = requests.get('http%s://%s/master/state.json' % ('s' if is_ssl else '', MESOS_MASTER_CIDR),
-                                  verify=os.path.join(work_dir, SSL_CERT_FILE))
-            if result.status_code == 200:
+            output, _ = call(curl_ssl(work_dir) + ['-I',
+                'http%s://%s/master/state.json' % ('s' if is_ssl else '', MESOS_MASTER_CIDR)])
+            if '200 OK' in output:
                 break
-        except requests.ConnectionError as e:
+        except subprocess.CalledProcessError as e:
             print e
 
         time.sleep(1)
@@ -143,13 +163,12 @@ def start_agent(work_dir, flags=[]):
         os.path.join(mesos_path(), MESOS_AGENT_BIN),
         '--master=%s' % MESOS_MASTER_CIDR,
         '--work_dir=%s' % work_dir] + flags,
-        stdin=None,
         stdout=stdout,
         stderr=stderr)
 
     assert agent.returncode is None
 
-    register_exit(lambda: subprocess.check_call(['rm', '-rf', '/tmp/mesos/meta/slaves/latest']))
+    register_exit(lambda: call(['rm', '-rf', '/tmp/mesos/meta/slaves/latest']))
     register_exit(lambda: agent.kill())
 
 
@@ -157,14 +176,12 @@ def wait_for_agent(work_dir, num_agents=1, timeout=7, is_ssl=False):
     """Waits for an Agent to start."""
     while timeout:
         try:
-            result = requests.get('http%s://%s/master/state.json' % ('s' if is_ssl else '', MESOS_MASTER_CIDR),
-                                  verify=os.path.join(work_dir, SSL_CERT_FILE))
-            if result.status_code == 200:
-                result = result.json()
-                if len(result['slaves']) == num_agents and all(map(lambda x: x['active'], result['slaves'])):
-                    break
-        except requests.ConnectionError as e:
-            print e
+            result, _ = call(curl_ssl(work_dir) + ['http%s://%s/master/state.json' % ('s' if is_ssl else '', MESOS_MASTER_CIDR)])
+            result = json.loads(result)
+            if len(result['slaves']) == num_agents and all(map(lambda x: x['active'], result['slaves'])):
+                break
+        except subprocess.CalledProcessError as e:
+            pass
 
         time.sleep(1)
         timeout -= 1
@@ -174,20 +191,18 @@ def wait_for_agent(work_dir, num_agents=1, timeout=7, is_ssl=False):
 
 def start_zookeeper():
     """Starts ZooKeeper."""
-    subprocess.check_call(['zkserver', 'start'])
-    register_exit(lambda: subprocess.check_call(['rm', '-rf', '/usr/local/var/run/zookeeper/data']))
-    register_exit(lambda: subprocess.check_call(['zkserver', 'stop']))
+    call(['zkserver', 'start'])
+    register_exit(lambda: call(['rm', '-rf', '/usr/local/var/run/zookeeper/data']))
+    register_exit(lambda: call(['zkserver', 'stop']))
 
 
 def check_framework_in_state_json(work_dir, framework, is_ssl=False):
     """Checks master's state.json for the given framework."""
-    result = requests.get('http%s://localhost:5050/master/state.json' % ('s' if is_ssl else ''),
-                          verify=os.path.join(work_dir, SSL_CERT_FILE))
-    if result.status_code == 200:
-        result = result.json()['frameworks']
-        result = filter(lambda x: x['name'] == framework, result)
-        if len(result) == 1 and result[0]['active']:
-            return True
+    result, _ = call(curl_ssl(work_dir) + ['http%s://localhost:5050/master/state.json' % ('s' if is_ssl else '')])
+    result = json.loads(result)['frameworks']
+    result = filter(lambda x: x['name'] == framework, result)
+    if len(result) == 1 and result[0]['active']:
+        return True
 
     return False
 
@@ -205,7 +220,6 @@ def start_marathon(work_dir, is_ssl=False, flags=[]):
         '--http%s_port' % ('s' if is_ssl else ''), '8444' if is_ssl else '8081',
         '--master', MESOS_MASTER_CIDR,
         '--zk', 'zk://localhost:2181/marathon'] + flags,
-        stdin=None,
         stdout=stdout,
         stderr=stderr)
     register_exit(lambda: marathon.kill())
@@ -217,14 +231,14 @@ def wait_for_marathon(work_dir, timeout=25, is_ssl=False):
         try:
             # Note: Some versions of Python (on OSX) do not have TLSv1.2 support.
             # So we need to use curl to talk via HTTPS.
-            output = subprocess.check_output([
+            output, _ = call([
                 'curl', '-I', '--tlsv1.2',
                 '--cacert', os.path.join(work_dir, SSL_CERT_FILE),
                 'http%s://localhost:%d/ping' % ('s' if is_ssl else '', 8444 if is_ssl else 8081)])
             if '200 OK' in output:
                 break
         except subprocess.CalledProcessError as e:
-            print e
+            pass
 
         time.sleep(1)
         timeout -= 1
@@ -233,6 +247,42 @@ def wait_for_marathon(work_dir, timeout=25, is_ssl=False):
         return False
 
     return check_framework_in_state_json(work_dir, 'marathon', is_ssl)
+
+
+def run_example_marathon_app(work_dir, timeout=10, is_ssl=False):
+    """Runs a trivial marathon command and checks the result."""
+    app_def = {
+               "id" : "basic-0",
+              "cmd" : "while [ true ]; do echo 'Hello Marathon'; sleep 5; done",
+             "cpus" : 0.1,
+              "mem" : 10.0,
+        "instances" : 1
+    }
+
+    # Launch a sleep task.
+    call([
+        'curl', '--tlsv1.2', '-m', '2',
+        '--cacert', os.path.join(work_dir, SSL_CERT_FILE),
+        '-X', 'POST',
+        'http%s://localhost:%d/v2/apps' % ('s' if is_ssl else '', 8444 if is_ssl else 8081),
+        '-H', 'Content-Type: application/json',
+        '-d', json.dumps(app_def)])
+
+    # Wait for it.
+    while timeout:
+        result, _ = call([
+            'curl', '--tlsv1.2', '-m', '2',
+            '--cacert', os.path.join(work_dir, SSL_CERT_FILE),
+            'http%s://localhost:%d/v2/apps/basic-0/tasks' % ('s' if is_ssl else '', 8444 if is_ssl else 8081)])
+
+        result = json.loads(result)
+        if len(result['tasks']) == 1 and result['tasks'][0]['appId'] == '/basic-0':
+            return True
+
+        time.sleep(1)
+        timeout -= 1
+
+    return False
 
 
 def start_chronos(work_dir, flags=[], is_ssl=False):
@@ -251,7 +301,6 @@ def start_chronos(work_dir, flags=[], is_ssl=False):
         '--http_address', 'localhost',
         '--master', MESOS_MASTER_CIDR,
         '--zk_hosts', 'localhost:2181'] + flags,
-        stdin=None,
         stdout=stdout,
         stderr=stderr)
     register_exit(lambda: chronos.kill())
@@ -263,14 +312,14 @@ def wait_for_chronos(work_dir, timeout=15, is_ssl=False):
         try:
             # Note: Some versions of Python (on OSX) do not have TLSv1.2 support.
             # So we need to use curl to talk via HTTPS.
-            output = subprocess.check_output([
+            output, _ = call([
                 'curl', '-I', '--tlsv1.2', '-m', '2',
                 '--cacert', os.path.join(work_dir, SSL_CERT_FILE),
                 'http%s://localhost:%d/scheduler/jobs' % ('s' if is_ssl else '', 8443 if is_ssl else 8080)])
             if '200 OK' in output:
                 break
         except subprocess.CalledProcessError as e:
-            print e
+            pass
 
         time.sleep(1)
         timeout -= 1

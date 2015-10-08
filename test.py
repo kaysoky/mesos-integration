@@ -42,6 +42,7 @@ class NoSSL_Test(unittest.TestCase):
     def test_marathon(self):
         start_marathon(self.work_dir)
         self.assertTrue(wait_for_marathon(self.work_dir), 'Marathon failed to start in time.')
+        self.assertTrue(run_example_marathon_app(self.work_dir))
 
 
     def test_spark(self):
@@ -60,9 +61,6 @@ class SSL_Test(unittest.TestCase):
         os.environ['SSL_ENABLED'] = 'true'
         os.environ['SSL_KEY_FILE'] = os.path.join(cls.work_dir, SSL_KEY_FILE)
         os.environ['SSL_CERT_FILE'] = os.path.join(cls.work_dir, SSL_CERT_FILE)
-
-        # This is less secure.  But SSL_ENABLE_TLS_V1_2 is not available.
-        os.environ['SSL_ENABLE_TLS_V1_0'] = 'true'
 
         # Start Mesos.
         start_master(cls.work_dir)
@@ -93,6 +91,7 @@ class SSL_Test(unittest.TestCase):
                        flags=['--ssl_keystore_path', os.path.join(self.work_dir, SSL_MARATHON_KEYSTORE),
                               '--ssl_keystore_password', SUPER_SECURE_PASSPHRASE])
         self.assertTrue(wait_for_marathon(self.work_dir, is_ssl=True), 'Marathon failed to start in time.')
+        self.assertTrue(run_example_marathon_app(self.work_dir, is_ssl=True))
 
 
     def test_spark(self):
@@ -101,10 +100,10 @@ class SSL_Test(unittest.TestCase):
 
 if __name__ == '__main__':
     # Check that `openssl` is available.
-    subprocess.check_call(['openssl', 'version'])
+    call(['openssl', 'version'])
 
     # Check that ZooKeeper is available.
-    subprocess.check_call(['zkserver', 'print-cmd'])
+    call(['zkserver', 'print-cmd'])
 
     for var in [MESOS_BIN_PATH, PATH_TO_MARATHON, PATH_TO_CHRONOS, PATH_TO_SPARK]:
         if var not in os.environ:
