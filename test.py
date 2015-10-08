@@ -7,6 +7,12 @@ import unittest
 from constants import *
 from utils import *
 
+import ssl_utils
+from chronos_utils import *
+from marathon_utils import *
+from mesos_utils import *
+from spark_utils import *
+
 
 class NoSSL_Test(unittest.TestCase):
     """Sanity tests stuff without SSL."""
@@ -57,7 +63,7 @@ class SSL_Test(unittest.TestCase):
         cls.work_dir = tempfile.mkdtemp(prefix='mesos-integration-')
 
         # Setup SSL things.
-        generate_ssl_stuff(cls.work_dir)
+        ssl_utils.generate_ssl_stuff(cls.work_dir)
         os.environ['SSL_ENABLED'] = 'true'
         os.environ['SSL_KEY_FILE'] = os.path.join(cls.work_dir, SSL_KEY_FILE)
         os.environ['SSL_CERT_FILE'] = os.path.join(cls.work_dir, SSL_CERT_FILE)
