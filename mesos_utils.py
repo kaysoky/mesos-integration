@@ -50,18 +50,19 @@ def wait_for_master(work_dir, timeout=5, is_ssl=False):
     return timeout > 0
 
 
-def start_agent(work_dir, flags=[]):
+def start_agent(work_dir, flags=[], ip=1):
     """Starts an Agent with the given flags."""
     print 'Starting Mesos agent'
-    stdout = open(os.path.join(work_dir, 'a_stdout.txt'), 'w')
-    stderr = open(os.path.join(work_dir, 'a_stderr.txt'), 'w')
+    stdout = open(os.path.join(work_dir, 'a%d_stdout.txt' % ip), 'w')
+    stderr = open(os.path.join(work_dir, 'a%d_stderr.txt' % ip), 'w')
     register_exit(lambda: stdout.close())
     register_exit(lambda: stderr.close())
 
     agent = subprocess.Popen([
         os.path.join(mesos_path(), MESOS_AGENT_BIN),
         '--master=%s' % MESOS_MASTER_CIDR,
-        '--work_dir=%s' % work_dir] + flags,
+        '--work_dir=%s' % work_dir,
+        '--ip=127.0.0.%d' % ip] + flags,
         stdout=stdout,
         stderr=stderr)
 
@@ -73,6 +74,7 @@ def start_agent(work_dir, flags=[]):
 
 def wait_for_agent(work_dir, num_agents=1, timeout=7, is_ssl=False):
     """Waits for an Agent to start."""
+    timeout *= num_agents
     while timeout:
         try:
             result = requests.get('http%s://%s/master/state.json' % ('s' if is_ssl else '', MESOS_MASTER_CIDR),

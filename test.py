@@ -14,6 +14,9 @@ from mesos_utils import *
 from spark_utils import *
 
 
+NUMBER_OF_AGENTS = int(os.environ[TEST_NUM_AGENTS]) if TEST_NUM_AGENTS in os.environ else 1
+
+
 class NoSSL_Test(unittest.TestCase):
     """Sanity tests stuff without SSL."""
 
@@ -28,8 +31,9 @@ class NoSSL_Test(unittest.TestCase):
         if not wait_for_master(cls.work_dir):
             assert False, 'Master failed to start in time.'
 
-        start_agent(cls.work_dir)
-        if not wait_for_agent(cls.work_dir):
+        for i in range(NUMBER_OF_AGENTS):
+            start_agent(cls.work_dir, ip=i + 1)
+        if not wait_for_agent(cls.work_dir, num_agents=NUMBER_OF_AGENTS):
             assert False, 'Agent failed to start in time.'
 
         start_zookeeper()
@@ -73,8 +77,9 @@ class SSL_Test(unittest.TestCase):
         if not wait_for_master(cls.work_dir, is_ssl=True):
             assert False, 'Master failed to start in time.'
 
-        start_agent(cls.work_dir)
-        if not wait_for_agent(cls.work_dir, is_ssl=True):
+        for i in range(NUMBER_OF_AGENTS):
+            start_agent(cls.work_dir, ip=i + 1)
+        if not wait_for_agent(cls.work_dir, is_ssl=True, num_agents=NUMBER_OF_AGENTS):
             assert False, 'Agent failed to start in time.'
 
         start_zookeeper()

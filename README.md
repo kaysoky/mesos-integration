@@ -30,7 +30,19 @@
   export MESOS_NATIVE_JAVA_LIBRARY=/path/to/libmesos.dylib
   ```
 
-2. Then:
+2. Optional:
+  ```
+  # Add some more loopback interfaces, in case you want more agents.
+  sudo ifconfig lo0 alias 127.0.0.2 up
+  sudo ifconfig lo0 alias 127.0.0.3 up
+  sudo ifconfig lo0 alias 127.0.0.4 up
+  # Etc...
+
+  # Number of agents to spawn.  There must be enough loopback interfaces.
+  export TEST_NUM_AGENTS = 4
+  ```
+
+3. Then:
   ```
   python test.py
   ```
