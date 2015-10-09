@@ -39,7 +39,7 @@
   # Etc...
 
   # Number of agents to spawn.  There must be enough loopback interfaces.
-  export TEST_NUM_AGENTS = 4
+  export TEST_NUM_AGENTS=4
   ```
 
 3. Then:

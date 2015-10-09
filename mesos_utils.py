@@ -62,7 +62,8 @@ def start_agent(work_dir, flags=[], ip=1):
         os.path.join(mesos_path(), MESOS_AGENT_BIN),
         '--master=%s' % MESOS_MASTER_CIDR,
         '--work_dir=%s' % work_dir,
-        '--ip=127.0.0.%d' % ip] + flags,
+        '--ip=127.0.0.%d' % ip,
+        '--hostname=127.0.0.%d' % ip] + flags,
         stdout=stdout,
         stderr=stderr)
 
