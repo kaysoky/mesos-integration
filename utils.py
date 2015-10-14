@@ -12,6 +12,11 @@ def call(command):
     Blocks on subprocess.Popen until the command finishes.
     Returns the stdout and stderr.  Suppresses console output.
     """
+
+    # To print output.
+    return subprocess.check_output(command)
+
+    # To not print output.
     stdout, stderr = subprocess.Popen(command,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE).communicate()

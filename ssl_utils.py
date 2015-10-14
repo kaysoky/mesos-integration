@@ -1,4 +1,5 @@
 import os
+import random
 
 from constants import *
 from utils import *
@@ -126,9 +127,9 @@ def generate_ssl_stuff(work_dir):
     # Generate some files that get modified as a side-effect of openssl actions.
     call(['touch', os.path.join(work_dir, SSL_INDEX_FILE)])
     with open(os.path.join(work_dir, SSL_SERIAL_FILE), 'w') as f:
-        f.write('1000')
+        f.write('%d' % random.randint(1, 1000000))
     with open(os.path.join(work_dir, SSL_CRL_FILE), 'w') as f:
-        f.write('1000')
+        f.write('%d' % random.randint(1, 1000000))
 
     # Write the configuration file.
     with open(os.path.join(work_dir, SSL_CONFIG_FILE), 'w') as f:

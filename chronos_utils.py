@@ -27,6 +27,8 @@ def start_chronos(work_dir, flags=[], is_ssl=False):
         '--mesos_framework_name', 'chronos',
         '--hostname', 'localhost',
         '--http_address', 'localhost',
+        '--http_port', '8082',
+        '--https_port', '8445',
         '--master', MESOS_MASTER_CIDR,
         '--zk_hosts', 'localhost:2181'] + flags,
         stdout=stdout,
@@ -38,7 +40,7 @@ def wait_for_chronos(work_dir, timeout=15, is_ssl=False):
     """Waits for the Chronos to start up."""
     while timeout:
         try:
-            result = requests.get('http%s://localhost:%d/scheduler/jobs' % ('s' if is_ssl else '', 8443 if is_ssl else 8080),
+            result = requests.get('http%s://localhost:%d/scheduler/jobs' % ('s' if is_ssl else '', 8445 if is_ssl else 8082),
                 verify=os.path.join(work_dir, SSL_CHAIN_FILE))
             if result.status_code == 200:
                 break

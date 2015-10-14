@@ -12,6 +12,7 @@ from chronos_utils import *
 from marathon_utils import *
 from mesos_utils import *
 from spark_utils import *
+from jenkins_utils import *
 
 
 NUMBER_OF_AGENTS = int(os.environ[TEST_NUM_AGENTS]) if TEST_NUM_AGENTS in os.environ else 1
@@ -57,6 +58,12 @@ class NoSSL_Test(unittest.TestCase):
 
     def test_spark(self):
         self.assertTrue(run_example_spark_job(self.work_dir))
+
+
+    def test_jenkins(self):
+        start_jenkins(self.work_dir)
+        self.assertTrue(wait_for_jenkins(self.work_dir), 'Jenkins failed to start in time.')
+        configure_jenkins(self.work_dir)
 
 
 class SSL_Test(unittest.TestCase):
@@ -109,6 +116,12 @@ class SSL_Test(unittest.TestCase):
         self.assertTrue(run_example_spark_job(self.work_dir))
 
 
+    def test_jenkins(self):
+        start_jenkins(self.work_dir, is_ssl=True)
+        self.assertTrue(wait_for_jenkins(self.work_dir, is_ssl=True), 'Jenkins failed to start in time.')
+        configure_jenkins(self.work_dir, is_ssl=True)
+
+
 if __name__ == '__main__':
     # Check that `openssl` is available.
     call(['openssl', 'version'])
@@ -116,7 +129,7 @@ if __name__ == '__main__':
     # Check that ZooKeeper is available.
     call(['zkserver', 'print-cmd'])
 
-    for var in [MESOS_BIN_PATH, PATH_TO_MARATHON, PATH_TO_CHRONOS, PATH_TO_SPARK]:
+    for var in [MESOS_BIN_PATH, PATH_TO_MARATHON, PATH_TO_CHRONOS, PATH_TO_SPARK, PATH_TO_JENKINS]:
         if var not in os.environ:
             print 'Environment variable "%s" not set.' % var
             exit(1)

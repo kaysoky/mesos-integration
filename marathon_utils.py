@@ -23,7 +23,8 @@ def start_marathon(work_dir, is_ssl=False, flags=[]):
 
     marathon = subprocess.Popen([
         os.path.join(marathon_path(), MARATHON_BIN),
-        '--http%s_port' % ('s' if is_ssl else ''), '8444' if is_ssl else '8081',
+        '--http_port', '8081',
+        '--https_port', '8444',
         '--master', MESOS_MASTER_CIDR,
         '--zk', 'zk://localhost:2181/marathon'] + flags,
         stdout=stdout,

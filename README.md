@@ -18,6 +18,8 @@
 5. [Spark](http://spark.apache.org/docs/latest/building-spark.html).
   * `git checkout v1.5.1`
   * `build/mvn -Pyarn -Phadoop-2.4 -Dhadoop.version=2.4.0 -DskipTests clean package`
+6. [Jenkins Mesos plugin](https://github.com/jenkinsci/mesos-plugin)
+  * `mvn package`
 
 ## Run
 1. Set the following environmental variables:
@@ -26,6 +28,7 @@
   export PATH_TO_MARATHON=/path/to/marathon/bin
   export PATH_TO_CHRONOS=/path/to/chronos/bin/chronos-version.jar
   export PATH_TO_SPARK=/path/to/spark
+  export PATH_TO_JENKINS=/path/to/jenkins-mesos-plugin
   export MESOS_NATIVE_LIBRARY=/path/to/libmesos.dylib
 
   # Optional, unless your binaries are not in /usr/lib or /usr/local/lib.
