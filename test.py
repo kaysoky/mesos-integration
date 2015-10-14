@@ -64,6 +64,7 @@ class NoSSL_Test(unittest.TestCase):
         start_jenkins(self.work_dir)
         self.assertTrue(wait_for_jenkins(self.work_dir), 'Jenkins failed to start in time.')
         configure_jenkins(self.work_dir)
+        self.assertTrue(check_jenkins_job(self.work_dir), 'Jenkins job failed to start in time.')
 
 
 class SSL_Test(unittest.TestCase):
@@ -120,6 +121,7 @@ class SSL_Test(unittest.TestCase):
         start_jenkins(self.work_dir, is_ssl=True)
         self.assertTrue(wait_for_jenkins(self.work_dir, is_ssl=True), 'Jenkins failed to start in time.')
         configure_jenkins(self.work_dir, is_ssl=True)
+        self.assertTrue(check_jenkins_job(self.work_dir, is_ssl=True), 'Jenkins job failed to start in time.')
 
 
 if __name__ == '__main__':

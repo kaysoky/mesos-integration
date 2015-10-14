@@ -22,16 +22,16 @@
       <description></description>
       <frameworkName>Jenkins Scheduler</frameworkName>
       <slavesUser></slavesUser>
-      <principal>jenkins</principal>
+      <principal>root</principal>
       <secret></secret>
       <checkpoint>false</checkpoint>
       <onDemandRegistration>false</onDemandRegistration>
-      <jenkinsURL></jenkinsURL>
+      <jenkinsURL>http://localhost:8080/jenkins</jenkinsURL>
       <slaveInfos>
         <org.jenkinsci.plugins.mesos.MesosSlaveInfo>
-          <slaveCpus>0.1</slaveCpus>
+          <slaveCpus>1</slaveCpus>
           <slaveMem>512</slaveMem>
-          <executorCpus>0.1</executorCpus>
+          <executorCpus>0.25</executorCpus>
           <maxExecutors>2</maxExecutors>
           <executorMem>128</executorMem>
           <remoteFSRoot>jenkins</remoteFSRoot>
