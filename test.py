@@ -27,6 +27,8 @@ class NoSSL_Test(unittest.TestCase):
 
         os.environ['SSL_ENABLED'] = 'false'
 
+        start_zookeeper()
+
         # Start Mesos.
         start_master(cls.work_dir)
         if not wait_for_master(cls.work_dir):
@@ -36,8 +38,6 @@ class NoSSL_Test(unittest.TestCase):
             start_agent(cls.work_dir, ip=i + 1)
         if not wait_for_agent(cls.work_dir, num_agents=NUMBER_OF_AGENTS):
             assert False, 'Agent failed to start in time.'
-
-        start_zookeeper()
 
 
     @classmethod
@@ -74,6 +74,8 @@ class SSL_Test(unittest.TestCase):
     def setUpClass(cls):
         cls.work_dir = tempfile.mkdtemp(prefix='mesos-integration-')
 
+        start_zookeeper()
+
         # Setup SSL things.
         ssl_utils.generate_ssl_stuff(cls.work_dir)
         os.environ['SSL_ENABLED'] = 'true'
@@ -89,8 +91,6 @@ class SSL_Test(unittest.TestCase):
             start_agent(cls.work_dir, ip=i + 1)
         if not wait_for_agent(cls.work_dir, is_ssl=True, num_agents=NUMBER_OF_AGENTS):
             assert False, 'Agent failed to start in time.'
-
-        start_zookeeper()
 
 
     @classmethod

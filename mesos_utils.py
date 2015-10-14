@@ -24,6 +24,8 @@ def start_master(work_dir, flags=[]):
     master = subprocess.Popen([
         os.path.join(mesos_path(), MESOS_MASTER_BIN),
         '--ip=%s' % MESOS_MASTER_IP,
+        '--zk=zk://localhost:2181/mesos',
+        '--quorum=1',
         '--work_dir=%s' % work_dir] + flags,
         stdout=stdout,
         stderr=stderr)

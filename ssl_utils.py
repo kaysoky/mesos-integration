@@ -125,11 +125,13 @@ def generate_ssl_stuff(work_dir):
           os.path.join(work_dir, SSL_PRIVATE_DIR)])
 
     # Generate some files that get modified as a side-effect of openssl actions.
+    # NOTE: The serial number must have an even number of characters.
+    serial_number = ('%d' % random.randint(1, 100000)) * 2
     call(['touch', os.path.join(work_dir, SSL_INDEX_FILE)])
     with open(os.path.join(work_dir, SSL_SERIAL_FILE), 'w') as f:
-        f.write('%d' % random.randint(1, 1000000))
+        f.write(serial_number)
     with open(os.path.join(work_dir, SSL_CRL_FILE), 'w') as f:
-        f.write('%d' % random.randint(1, 1000000))
+        f.write(serial_number)
 
     # Write the configuration file.
     with open(os.path.join(work_dir, SSL_CONFIG_FILE), 'w') as f:
